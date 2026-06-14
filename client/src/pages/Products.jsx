@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState , useEffect } from "react";
 import {
   Search,
   Plus,
@@ -26,229 +26,101 @@ import {
 
 function Products() {
 
-  
+const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] =
-  useState("all");
-const [sortBy, setSortBy] =
-  useState("name");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newProduct, setNewProduct] = useState({ name: "", category: "", price: "", stock: "" });
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const [showAddModal, setShowAddModal] =
-    useState(false);
+  // جلب البيانات من السيرفر عند تحميل الصفحة
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await getProducts();
+        setProducts(data);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      }
+    };
+    fetchData();
+  }, []);
 
-const [newProduct, setNewProduct] = useState({
-  name: "",
-  category: "",
-  price: "",
-  stock: "",
-});
-
-
-const [editingProduct, setEditingProduct] =
-  useState(null);
- const [products, setProducts] =
-  useState(getProducts());
-
-  const [imagePreview, setImagePreview] =
-  useState(null);
-
-const filteredProducts = products.filter(
-  (product) => {
-const searchMatch =
-product.name
-.toLowerCase()
-.includes(search.toLowerCase())
-||
-product.category
-.toLowerCase()
-.includes(search.toLowerCase());
-
-    const statusMatch =
-      statusFilter === "all" ||
-      product.status === statusFilter;
-
+  const filteredProducts = products.filter((product) => {
+    const searchMatch = product.name.toLowerCase().includes(search.toLowerCase()) ||
+                        product.category.toLowerCase().includes(search.toLowerCase());
+    const statusMatch = statusFilter === "all" || product.status === statusFilter;
     return searchMatch && statusMatch;
-  }
-);
+  });
 
-const sortedProducts =
-  [...filteredProducts].sort(
-    (a, b) => {
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortBy === "price") return Number(b.price.replace("$", "")) - Number(a.price.replace("$", ""));
+    if (sortBy === "status") return a.status.localeCompare(b.status);
+    if (sortBy === "stock") return b.stock - a.stock;
+    return a.name.localeCompare(b.name);
+  });
 
-      if (sortBy === "price") {
-        return (
-          Number(
-            b.price.replace("$", "")
-          ) -
-          Number(
-            a.price.replace("$", "")
-          )
-        );
-      }
-          if (sortBy === "status") {
-  return a.status.localeCompare(
-    b.status
-  );
-}
-
-      if (sortBy === "stock") {
-        return b.stock - a.stock;
-      }
-
-      return a.name.localeCompare(
-        b.name
-      );
-    }
-
-  );
-  
-
-
-  const handleAddProduct = () => {
-if (
- !newProduct.name.trim() ||
- !newProduct.price ||
- Number(newProduct.price) <= 0 ||
- Number(newProduct.stock) < 0
-)
-return;
-
-  const product = {
-    id: Date.now(),
-    image: imagePreview ||
-"https://picsum.photos/100",
-    name: newProduct.name,
-    category: newProduct.category,
-    price: `$${newProduct.price}`,
-    stock: Number(newProduct.stock),
-    status:
-  Number(newProduct.stock) > 0
-    ? "Active"
-    : "Out of Stock",
+  const handleAddProduct = async () => {
+    if (!newProduct.name.trim()) return;
+    const product = { 
+      ...newProduct, 
+      price: `$${newProduct.price}`, 
+      stock: Number(newProduct.stock),
+      status: Number(newProduct.stock) > 0 ? "Active" : "Out of Stock",
+      image: imagePreview || "https://picsum.photos/100" 
+    };
+    
+    await addProduct(product);
+    const updatedList = await getProducts();
+    setProducts(updatedList);
+    setNewProduct({ name: "", category: "", price: "", stock: "" });
+    setImagePreview(null);
+    setShowAddModal(false);
   };
 
-  setProducts(addProduct(product));
+  const handleDeleteProduct = async (id) => {
+    await deleteProduct(id);
+    setProducts(products.filter((p) => p._id !== id));
+  };
 
-  setNewProduct({
-    name: "",
-    category: "",
-    price: "",
-    stock: "",
-  });
+  const handleSaveEdit = async () => {
+    const updatedProduct = {
+      ...editingProduct,
+      status: Number(editingProduct.stock) > 0 ? "Active" : "Out of Stock",
+    };
+    await updateProduct(updatedProduct);
+    const updatedList = await getProducts();
+    setProducts(updatedList);
+    setEditingProduct(null);
+  };
 
-  setImagePreview(null);
+  const revenue = products.reduce((total, p) => total + Number(p.price.replace("$", "")) * p.stock, 0);
 
+  const itemsPerPage = 6;
+  const indexOfLast = currentPage * itemsPerPage;
+  const indexOfFirst = indexOfLast - itemsPerPage;
+  const currentProducts = sortedProducts.slice(indexOfFirst, indexOfLast);
+  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
 
-  setShowAddModal(false);
-};
-const [productToDelete, setProductToDelete] =
-  useState(null);
+  const handleExport = () => {
+    const headers = "ID,Name,Category,Price,Stock,Status\n";
+    const rows = products.map((p) => `${p._id},${p.name},${p.category},${p.price},${p.stock},${p.status}`).join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "products.csv";
+    a.click();
+  };
 
-const handleDeleteProduct = (id) => {
-  setProducts(deleteProduct(id));
-};
-
-const handleEditProduct = (product) => {
-  setEditingProduct(product);
-};
-
-const handleSaveEdit = () => {
-const updatedProduct = {
-  ...editingProduct,
-  status:
-    editingProduct.stock > 0
-      ? "Active"
-      : "Out of Stock",
-};
-
-setProducts(
-  updateProduct(updatedProduct)
-);
-
-
-
-  setProducts(
-    products.map((product) =>
-      product.id === editingProduct.id
-        ? editingProduct
-        : product
-    )
-  );
-
-  setEditingProduct(null);
-};
-
-const revenue = products.reduce(
-  (total, product) =>
-    total +
-    Number(product.price.replace("$", "")) *
-      product.stock,
-  0
-);
-
-const [selectedProduct,
-setSelectedProduct] =
-useState(null);
-
-
-
-const [currentPage,
-setCurrentPage] = useState(1);
-
-const itemsPerPage = 6;
-
-const indexOfLast =
-currentPage * itemsPerPage;
-
-const indexOfFirst =
-indexOfLast - itemsPerPage;
-
-const currentProducts =
-sortedProducts.slice(
-  indexOfFirst,
-  indexOfLast
-);
-
-const totalPages =
-Math.ceil(
-  sortedProducts.length /
-  itemsPerPage
-);
-
-
-const handleExport = () => {
-  const headers =
-    "ID,Name,Category,Price,Stock,Status\n";
-
-  const rows = products
-    .map(
-      (p) =>
-        `${p.id},${p.name},${p.category},${p.price},${p.stock},${p.status}`
-    )
-    .join("\n");
-
-  const csv = headers + rows;
-
-  const blob = new Blob([csv], {
-    type: "text/csv",
-  });
-
-  const url =
-    window.URL.createObjectURL(blob);
-
-  const a =
-    document.createElement("a");
-
-  a.href = url;
-  a.download = "products.csv";
-
-  document.body.appendChild(a);
-  a.click();
-
-  document.body.removeChild(a);
-};
-
-
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+  };
   return (
         <motion.div
       initial={{ opacity: 0 }}
@@ -641,7 +513,7 @@ className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
   ) : (
     currentProducts.map((product) => (
       <div
-        key={product.id}
+        key={product._id}
 
 className="
 bg-white
@@ -1173,7 +1045,7 @@ Close
         <button
           onClick={() => {
             handleDeleteProduct(
-              productToDelete.id
+              productToDelete._id
             );
             setProductToDelete(null);
           }}

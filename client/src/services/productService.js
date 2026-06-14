@@ -1,61 +1,25 @@
-import mockProducts from "../data/mockProducts";
+import axios from "axios";
 
-const STORAGE_KEY = "products";
+// رابط السيرفر (الباك إند) الذي يعمل على المنفذ 5000
+const API_URL = "http://localhost:5000/api/products";
 
-export const getProducts = () => {
-  const data = localStorage.getItem(STORAGE_KEY);
-
-  if (data) return JSON.parse(data);
-
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(mockProducts)
-  );
-
-  return mockProducts;
+export const getProducts = async () => {
+  const response = await axios.get(API_URL);
+  return response.data; // هنا ستصلك البيانات الحقيقية من MongoDB
 };
 
-export const addProduct = (product) => {
-  const products = getProducts();
-
-  const updated = [...products, product];
-
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(updated)
-  );
-
-  return updated;
+export const addProduct = async (product) => {
+  const response = await axios.post(API_URL, product);
+  return response.data;
 };
 
-export const updateProduct = (updatedProduct) => {
-  const products = getProducts();
-
-  const updated = products.map((p) =>
-    p.id === updatedProduct.id
-      ? updatedProduct
-      : p
-  );
-
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(updated)
-  );
-
-  return updated;
+export const updateProduct = async (updatedProduct) => {
+  // ملاحظة: تأكد أنك تستخدم _id (الذي يأتي من مونغو)
+  const response = await axios.put(`${API_URL}/${updatedProduct._id}`, updatedProduct);
+  return response.data;
 };
 
-export const deleteProduct = (id) => {
-  const products = getProducts();
-
-  const updated = products.filter(
-    (p) => p.id !== id
-  );
-
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(updated)
-  );
-
-  return updated;
+export const deleteProduct = async (id) => {
+  await axios.delete(`${API_URL}/${id}`);
+  return id;
 };
